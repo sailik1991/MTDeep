@@ -45,7 +45,7 @@ def get_FGM_cg(sess, wrap, x):
     adv_x = tf.stop_gradient(adv_x)
     return adv_x
 
-def main(sess, attack_AT=False):
+def main(sess, model_type='vanilla'):
     # ----- Get train and test data -----
     (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
 
@@ -54,13 +54,15 @@ def main(sess, attack_AT=False):
     for model_name in ['mlp', 'cnn', 'hrnn']:
         try:
             print('[DEBUG] Loading model.')
-            if attack_AT:
+            if model_type == 'at':
                 models[model_name] = load_model('AT_{}'.format(model_name))
+            elif model_type == 'eat':
+                models[model_name] = load_model('EAT_{}'.format(model_name))
             else:
                 models[model_name] = load_model(model_name)
         except:
-            if attack_AT:
-                print('[ERROR] Adversarially Trained models not found! Train and save error models first. Then, run this.')
+            if model_type == 'at' or model_type == 'eat':
+                print('[ERROR] Adversarially Trained models not found! Train and save strengthened models first. Then, run this.')
                 exit(1)
             print('[DEBUG] Loading failed. Trying to train the constituent model.')
             models['mlp'] = mnist_mlp.get_model(x_train, y_train, x_test, y_test)
@@ -126,8 +128,13 @@ if __name__ == '__main__':
     keras.backend.set_session(sess)
     if len(sys.argv) == 2:
         if sys.argv[1] == '--at':
-            main(sess, attack_AT=True)
+            print('[INFO] Attacking adversarially trained constituent models.')
+            main(sess, model_type = 'at')
+        elif sys.argv[1] == '--eat':
+            print('[INFO] Attakcing ensemble adversarially trained constituent models.')
+            main(sess, model_type = 'eat')
         else:
+            print('[INFO] Attacking vanilla models.')
             main(sess)
     else:
         main(sess)
