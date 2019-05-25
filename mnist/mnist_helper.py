@@ -8,8 +8,20 @@
 
 import keras
 
+#import constituent_models.mnist_hierarchical_rnn as hrnn
+#import constituent_models.mnist_cnn1 as cnn
+#import constituent_models.mnist_mlp as mlp
+
 img_rows, img_cols = 28, 28
 num_classes = 10
+
+def get_trained_models(x_train, y_train, x_test, y_test):
+    models['mlp'] = mlp.get_model(x_train, y_train, x_test, y_test)
+    models['cnn'] = cnn.get_model(x_train, y_train, x_test, y_test)
+    models['hrnn'] = hrnn.get_model(x_train, y_train, x_test, y_test)
+    for model_name in models.keys():
+        save_model(model_name, models[model_name])
+    return models
 
 def process_data(x_train, y_train, x_test, y_test, toCategorical=True):
     x_train = x_train.reshape(x_train.shape[0], img_rows, img_cols, 1)

@@ -23,7 +23,7 @@ def get_FGM_cg(sess, wrap, x):
     attack = cleverhans.attacks.FastGradientMethod(wrap, sess=sess)
     attack_params = {'eps': 0.3}
     adv_x = attack.generate(x, **attack_params)
-    adv_x = tf.stop_gradient(adv_x)
+    # adv_x = tf.stop_gradient(adv_x)
     return adv_x
 
 def main(sess):
@@ -38,12 +38,8 @@ def main(sess):
             models[model_name] = load_model(model_name)
         except:
             print('[DEBUG] Loading failed. Trying to train the constituent model.')
-            models['mlp'] = mnist_mlp.get_model(x_train, y_train, x_test, y_test)
-            models['cnn'] = mnist_cnn1.get_model(x_train, y_train, x_test, y_test)
-            models['hrnn'] = mnist_hierarchical_rnn.get_model(x_train, y_train, x_test, y_test)
-            for model_name in models.keys():
-                save_model(model_name, models[model_name]) 
-    
+            models = get_trained_models(x_train, y_train, x_test, y_test)
+
     x = tf.placeholder(tf.float32, shape=(None, 28, 28, 1))
     y = tf.placeholder(tf.float32, shape=(None, 10))
 

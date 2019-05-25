@@ -19,14 +19,7 @@ import constituent_models.mnist_hierarchical_rnn as mnist_hierarchical_rnn
 import constituent_models.mnist_irnn as mnist_irnn
 import constituent_models.mnist_mlp as mnist_mlp
 
-# --- Projected Gradient Descent ---
-def get_PGD_cg(sess, wrap, x, y):
-    attack = cleverhans.attacks.ProjectedGradientDescent(wrap, sess=sess)
-    # Consider only three class when searching for a successful attack perturbation
-    attack_params = {'eps': 0.3, 'eps_iter': 0.05, 'nb_iter': 10, 'y': y}
-    adv_x = attack.generate(x, **attack_params)
-    adv_x = tf.stop_gradient(adv_x)
-    return adv_x
+SMALL_BATCH_SIZE = 11
 
 # --- DeepFool ---
 def get_DF_cg(sess, wrap, x):
@@ -45,7 +38,15 @@ def get_FGM_cg(sess, wrap, x):
     adv_x = tf.stop_gradient(adv_x)
     return adv_x
 
-def main(sess, model_type='vanilla'):
+# --- Projected Gradient Descent ---
+def get_PGD_cg(sess, wrap, x, y):
+    attack = cleverhans.attacks.ProjectedGradientDescent(wrap, sess=sess)
+    attack_params = {'eps': 0.3, 'eps_iter': 0.05, 'y': y}
+    adv_x = attack.generate(x, **attack_params)
+    adv_x = tf.stop_gradient(adv_x)
+    return adv_x
+
+def main(sess, model_type=''):
     # ----- Get train and test data -----
     (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
 
@@ -54,22 +55,13 @@ def main(sess, model_type='vanilla'):
     for model_name in ['mlp', 'cnn', 'hrnn']:
         try:
             print('[DEBUG] Loading model.')
-            if model_type == 'at':
-                models[model_name] = load_model('AT_{}'.format(model_name))
-            elif model_type == 'eat':
-                models[model_name] = load_model('EAT_{}'.format(model_name))
-            else:
-                models[model_name] = load_model(model_name)
+            models[model_name] = load_model('{}{}'.format(model_type, model_name))
         except:
-            if model_type == 'at' or model_type == 'eat':
+            if model_type == 'AT_' or model_type == 'EAT_':
                 print('[ERROR] Adversarially Trained models not found! Train and save strengthened models first. Then, run this.')
                 exit(1)
             print('[DEBUG] Loading failed. Trying to train the constituent model.')
-            models['mlp'] = mnist_mlp.get_model(x_train, y_train, x_test, y_test)
-            models['cnn'] = mnist_cnn1.get_model(x_train, y_train, x_test, y_test)
-            models['hrnn'] = mnist_hierarchical_rnn.get_model(x_train, y_train, x_test, y_test)
-            for model_name in models.keys():
-                save_model(model_name, models[model_name])
+            models = get_trained_models(x_train, y_train, x_test, y_test)
     
     # ----- Make model ready for seamless interfacing with cleverhans attacks -----
     print('[DEBUG] Attacking the constituent models.')
@@ -86,8 +78,8 @@ def main(sess, model_type='vanilla'):
                  Comment out one by one and obtain metrices separately if you don't have enough resources.
         '''
         adv_xs['${}_{}$'.format('FGM', model_name[0])] = get_FGM_cg(sess, wraps[model_name], x)
-        # adv_xs['${}_{}$'.format('PGD', model_name[0])] = get_PGD_cg(sess, wraps[model_name], x, y)
-        # adv_xs['${}_{}$'.format('DF', model_name[0])] = get_DF_cg(sess, wraps[model_name], x)
+        #adv_xs['${}_{}$'.format('DF', model_name[0])] = get_DF_cg(sess, wraps[model_name], x)
+        #adv_xs['${}_{}$'.format('PGD', model_name[0])] = get_PGD_cg(sess, wraps[model_name], x, y)
 
     # --- Print out an accuracy table ---
     keras.backend.set_learning_phase(0)
@@ -107,12 +99,13 @@ def main(sess, model_type='vanilla'):
 
         # For each model, apply all attacks.
         for attack_name in adv_xs.keys():
-
+            print('[DEBUG] Attacking {} using {}.'.format(model_name, attack_name))
+            
             # This code branch is only entered once-- when computing accuracies for the first model.
             # Needed for generating the table header.
             if attack_name not in table_header:
                 table_header += '{} '.format(attack_name)
-
+            
             accuracy = cleverhans.utils_tf.model_eval(sess, x, y, models[model_name](adv_xs[attack_name]), x_test, y_test, args=eval_params)
             accuracy_attack += '{} '.format(accuracy * 100)
         
@@ -129,10 +122,10 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         if sys.argv[1] == '--at':
             print('[INFO] Attacking adversarially trained constituent models.')
-            main(sess, model_type = 'at')
+            main(sess, model_type = 'AT_')
         elif sys.argv[1] == '--eat':
             print('[INFO] Attakcing ensemble adversarially trained constituent models.')
-            main(sess, model_type = 'eat')
+            main(sess, model_type = 'EAT_')
         else:
             print('[INFO] Attacking vanilla models.')
             main(sess)
